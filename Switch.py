@@ -59,12 +59,15 @@ class Switch(StpSwitch):
 
         return
 
-    def send_messages(self, msg):
+    def send_messages(self):
         for id in self.links:
-            if self.state.activeLinks[id]:
+            pathThroughNeighbor = False
+            if (self.state.switchThrough == id):
+                pathThroughNeighbor = True
+            if self.state.linksMap[id]:
                 self.send_message(Message(self.state.root,
                                        self.state.distance, self.switchID, id,
-                                       not self.state.activeLinks[id]))
+                                        pathThroughNeighbor))
         
     def process_message(self, message):
         #TODO: This function needs to accept an incoming message and process it accordingly.
@@ -73,26 +76,54 @@ class Switch(StpSwitch):
 
         # if the current switchID is greater than the root from the message, update
         # the root, distance to the root, activeLinks, and send new messages
+        #resetTopo = False
         if (self.state.root > message.root):
+            #resetTopo = True
             self.state.root = message.root
+
             self.state.distance = message.distance + 1
-            #active link is next hop to the root
-            #self.state.linksMap[message.origin] = [False, True]
+
             self.state.switchThrough = message.origin
             # send messages that the state has been updated
             for key in self.state.linksMap:
                 if (self.state.linksMap[key][0]):
                     self.state.linksMap[key][1] = True
+                # if the neighbour is my switchthrough
+                elif (self.state.switchThrough == key):
+                    self.state.linksMap[key][1] = True
                 else:
                     self.state.linksMap[key][1] = False
-
             self.send_messages()
 
-        elif (not message.pathThrough and self.state.distance > message.distance+1):
+        elif (self.state.root == message.root and self.state.distance > message.distance+1):
             self.state.distance = message.distance + 1
-            self.state.activeLinks[message.origin] = True
-            self.state.activeLinks[self.state.switchThrough] = False
+            # active link is next hop to the root
+            # self.state.linksMap[message.origin] = [False, True]
             self.state.switchThrough = message.origin
+            for key in self.state.linksMap:
+                if (self.state.linksMap[key][0]):
+                    self.state.linksMap[key][1] = True
+                # if the neighbour is my switchthrough
+                elif (self.state.switchThrough == key):
+                    self.state.linksMap[key][1] = True
+                else:
+                    self.state.linksMap[key][1] = False
+            # send messages that the state has been updated
+            self.send_messages()
+
+        elif (self.state.root == message.root and self.state.distance == message.distance + 1
+              and message.origin < self.state.switchThrough):
+            # active link is next hop to the root
+            # self.state.linksMap[message.origin] = [False, True]
+            self.state.switchThrough = message.origin
+            for key in self.state.linksMap:
+                if (self.state.linksMap[key][0]):
+                    self.state.linksMap[key][1] = True
+                # if the neighbour is my switchthrough
+                elif (self.state.switchThrough == key):
+                    self.state.linksMap[key][1] = True
+                else:
+                    self.state.linksMap[key][1] = False
             # send messages that the state has been updated
             self.send_messages()
         
@@ -109,14 +140,11 @@ class Switch(StpSwitch):
         #      2 - 1, 2 - 3
         #      A full example of a valid output file is included (sample_output.txt) with the project skeleton.
 
-        logString = str()
+        logString = ""
 
-        for id in self.switchID:
-            for self.state.activeLinks:
-                if self.state.activeLinks == True:
-                    logString = logString.append(self.switchID.toString() + "-" + n +", ")
-                logString = logString[:-2]
-                if id <= self.switchID -2:
-                    logString = logString.append("/n")
+        for key in sorted(self.state.linksMap.keys()):
+            if self.state.linksMap[key][1] == True: #active
+                logString += str(self.switchID) + " - " + str(key) +", "
+        logString = logString[:-2]
 
         return logString
