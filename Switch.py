@@ -15,7 +15,6 @@
 from Message import *
 from StpSwitch import *
 
-
 class Switch(StpSwitch):
 
     class TopoState(object):
@@ -24,7 +23,7 @@ class Switch(StpSwitch):
             self.distance = 0
             self.linksMap = {} #see dict comprehension {n: True for n in neighbors}
             for n in neighbors:
-               self.linksMap[n] = [True, True]   #a list contain Y/N of pathThrough, and Y/N of activeLinks
+               self.linksMap[n] = [False, True]   #a list contain Y/N of pathThrough, and Y/N of activeLinks
             self.switchThrough = switchID #which switch do I go through to get to the root
 
 
@@ -64,11 +63,11 @@ class Switch(StpSwitch):
             pathThroughNeighbor = False
             if (self.state.switchThrough == id):
                 pathThroughNeighbor = True
-            if self.state.linksMap[id]:
-                self.send_message(Message(self.state.root,
-                                       self.state.distance, self.switchID, id,
-                                        pathThroughNeighbor))
-        
+            #if self.state.linksMap[id][1]:
+            self.send_message(Message(self.state.root,
+                                   self.state.distance, self.switchID, id,
+                                    pathThroughNeighbor))
+
     def process_message(self, message):
         #TODO: This function needs to accept an incoming message and process it accordingly.
         #      This function is called every time the switch receives a new message.
@@ -77,22 +76,28 @@ class Switch(StpSwitch):
         # if the current switchID is greater than the root from the message, update
         # the root, distance to the root, activeLinks, and send new messages
         #resetTopo = False
+        print(self.switchID, "switch", self.state.root, "state root ", message.root, ", message root", message.origin, "origin", message.distance, 'distance', self.state.switchThrough, 'switchThrough')
+        self.state.linksMap[message.origin][0] = message.pathThrough
+        if self.state.linksMap[message.origin][0]: #if path through set active
+            self.state.linksMap[message.origin][1] = True
+
+        #print("found a message that needs to be updated from", message.origin)
         if (self.state.root > message.root):
             #resetTopo = True
             self.state.root = message.root
-
             self.state.distance = message.distance + 1
-
             self.state.switchThrough = message.origin
             # send messages that the state has been updated
             for key in self.state.linksMap:
-                if (self.state.linksMap[key][0]):
+                #if neigh path through this switch
+                if self.state.linksMap[key][0]:
                     self.state.linksMap[key][1] = True
                 # if the neighbour is my switchthrough
-                elif (self.state.switchThrough == key):
+                elif self.state.switchThrough == key:
                     self.state.linksMap[key][1] = True
                 else:
                     self.state.linksMap[key][1] = False
+            print "I get to the case where smaller root is found"
             self.send_messages()
 
         elif (self.state.root == message.root and self.state.distance > message.distance+1):
@@ -109,6 +114,7 @@ class Switch(StpSwitch):
                 else:
                     self.state.linksMap[key][1] = False
             # send messages that the state has been updated
+            print "I get to the case where root is the same while distance is different"
             self.send_messages()
 
         elif (self.state.root == message.root and self.state.distance == message.distance + 1
@@ -119,14 +125,24 @@ class Switch(StpSwitch):
             for key in self.state.linksMap:
                 if (self.state.linksMap[key][0]):
                     self.state.linksMap[key][1] = True
-                # if the neighbour is my switchthrough
                 elif (self.state.switchThrough == key):
                     self.state.linksMap[key][1] = True
                 else:
                     self.state.linksMap[key][1] = False
             # send messages that the state has been updated
+            print "I get to the case where root and distance are the same, while sender is a better path"
             self.send_messages()
-        
+
+        else:
+            for key in self.state.linksMap:
+                if (self.state.linksMap[key][0]):
+                    self.state.linksMap[key][1] = True
+                elif (self.state.switchThrough == key):
+                    self.state.linksMap[key][1] = True
+                else:
+                    self.state.linksMap[key][1] = False
+
+
     def generate_logstring(self):
         #TODO: This function needs to return a logstring for this particular switch.  The
         #      string represents the active forwarding links for this switch and is invoked 
@@ -141,7 +157,8 @@ class Switch(StpSwitch):
         #      A full example of a valid output file is included (sample_output.txt) with the project skeleton.
 
         logString = ""
-
+        print self.switchID
+        print self.state.linksMap
         for key in sorted(self.state.linksMap.keys()):
             if self.state.linksMap[key][1] == True: #active
                 logString += str(self.switchID) + " - " + str(key) +", "
